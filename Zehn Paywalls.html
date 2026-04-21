@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Zehn · Paywall variations</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Lora:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  :root{
+    --ink:#03212E; --ink-2:#052A3B; --ink-3:#063349;
+    --green:#82FF7F; --cream:#FBF2A8;
+    --text:#EAF3F8; --text-dim:rgba(234,243,248,.66); --text-mute:rgba(234,243,248,.42);
+    --line:rgba(255,255,255,.08); --line-2:rgba(255,255,255,.14);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#0f0d0a;font-family:'Plus Jakarta Sans',system-ui,sans-serif}
+  button{font-family:inherit;cursor:pointer}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="components/paywall-screens.jsx"></script>
+
+<script type="text/babel">
+function ZehnMark({ size = 20 }){
+  const color = "#03212E";
+  return (
+    <div style={{width:size,height:size,borderRadius:size*0.27,background:"linear-gradient(145deg,#82FF7F,#92F090)",display:"grid",placeItems:"center",boxShadow:"0 4px 14px rgba(130,255,127,.25)"}}>
+      <svg width={size*0.58} height={size*0.58} viewBox="0 0 24 24">
+        <rect x="3" y="4" width="18" height="2.6" rx="1.3" fill={color}/>
+        <rect x="3" y="10.7" width="18" height="2.6" rx="1.3" fill={color} transform="rotate(-32 12 12)"/>
+        <rect x="3" y="17.4" width="18" height="2.6" rx="1.3" fill={color}/>
+      </svg>
+    </div>
+  );
+}
+
+function NoteCard({ step, label, note, tag }){
+  return (
+    <div style={{width:390,padding:"18px 20px",background:"#fff",borderRadius:14,boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div style={{fontSize:11,color:"#82683c",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".12em",textTransform:"uppercase",fontWeight:700}}>Variation {step}</div>
+        {tag && <div style={{fontSize:10,fontWeight:700,color:"#5a4a2a",padding:"3px 8px",borderRadius:999,background:"#fef4a8",letterSpacing:".06em",textTransform:"uppercase"}}>{tag}</div>}
+      </div>
+      <div style={{fontSize:16,fontWeight:700,color:"rgba(40,30,20,.9)",marginTop:6,letterSpacing:"-0.01em"}}>{label}</div>
+      <div style={{fontSize:13,color:"rgba(60,50,40,.65)",marginTop:6,lineHeight:1.45}}>{note}</div>
+    </div>
+  );
+}
+
+function App(){
+  return (
+    <DesignCanvas>
+      {/* Title block */}
+      <div style={{padding:"0 60px 28px",maxWidth:1100}}>
+        <div style={{display:"inline-flex",alignItems:"center",gap:10,padding:"6px 14px",borderRadius:999,background:"#fff",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
+          <ZehnMark size={20}/>
+          <span style={{fontSize:12,fontWeight:700,letterSpacing:".14em",textTransform:"uppercase",color:"#5a4a2a",fontFamily:"'JetBrains Mono',monospace"}}>Zehn · Paywall mockups</span>
+        </div>
+        <h1 style={{marginTop:18,fontSize:44,fontWeight:800,letterSpacing:"-0.03em",color:"rgba(40,30,20,.9)",lineHeight:1.05}}>Paywall — 3 variations</h1>
+        <p style={{marginTop:10,fontSize:15,color:"rgba(60,50,40,.65)",maxWidth:620,lineHeight:1.5}}>
+          Three takes on the same conversion moment, each tuned to a different trigger. All use Zehn's navy canvas and electric-green primary, with the cream accent reserved for the rare-deal tier so the launch offer reads visually distinct from the standard paywall.
+        </p>
+      </div>
+
+      {/* Row 1 — paywalls */}
+      <DCSection title="Paywall screens" subtitle="iOS · 390×800" gap={56}>
+        <DCArtboard label="A — Onboarding takeover" width={390} height={800} style={{borderRadius:52,background:"transparent",boxShadow:"none"}}>
+          <PaywallFull/>
+        </DCArtboard>
+
+        <DCArtboard label="B-trigger — Book detail (locked)" width={390} height={800} style={{borderRadius:52,background:"transparent",boxShadow:"none"}}>
+          <BookDetailLocked/>
+        </DCArtboard>
+
+        <DCArtboard label="B — Bottom sheet (mid-flow)" width={390} height={800} style={{borderRadius:52,background:"transparent",boxShadow:"none"}}>
+          <PaywallSheet/>
+        </DCArtboard>
+
+        <DCArtboard label="C — Launch deal · lifetime" width={390} height={800} style={{borderRadius:52,background:"transparent",boxShadow:"none"}}>
+          <PaywallLaunch/>
+        </DCArtboard>
+      </DCSection>
+
+      {/* Row 2 — notes */}
+      <DCSection title="When each paywall fires" gap={56}>
+        <NoteCard step="A" label="Full-screen takeover" tag="Post-signup" note="Shown once, right after onboarding completes. Hero stack of covers sets emotional tone — 'a whole library.' Annual is pre-selected (save 50%); monthly is a secondary option, not a toggle, so both prices stay on screen."/>
+        <div style={{width:390,padding:"18px 20px",background:"#fff",borderRadius:14,boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
+          <div style={{fontSize:11,color:"#82683c",fontFamily:"'JetBrains Mono',monospace",letterSpacing:".12em",textTransform:"uppercase",fontWeight:700}}>Trigger</div>
+          <div style={{fontSize:16,fontWeight:700,color:"rgba(40,30,20,.9)",marginTop:6,letterSpacing:"-0.01em"}}>Book detail · locked state</div>
+          <div style={{fontSize:13,color:"rgba(60,50,40,.65)",marginTop:6,lineHeight:1.45}}>Free user taps a premium book. They read the intro (Lora serif for the book body — signals 'real reading'), then hit a soft wall. The CTA opens Variation B as a sheet, so context isn't lost.</div>
+        </div>
+        <NoteCard step="B" label="Bottom sheet" tag="Mid-flow" note="Invoked from anywhere premium content is tapped. Sits over the previous screen at reduced opacity so users feel like they can come back. Plan toggle is segmented (not stacked) to keep the sheet compact — Annual is always the left/default pill."/>
+        <NoteCard step="C" label="Launch deal · lifetime" tag="Week 1 only" note="Reuses the cream/gold accent to signal scarcity without screaming. Progress bar + countdown are restrained — one of each, no red, no animated flames. Falls back to Variation A pricing after the 1,000-seat window closes."/>
+      </DCSection>
+
+      <DCPostIt top={200} left={36} rotate={-4} width={190}>
+        System rule: green accent = recurring plans (A, B). Cream accent = the one-time lifetime tier (C). Never mix on the same screen.
+      </DCPostIt>
+      <DCPostIt bottom={260} left={36} rotate={3} width={190}>
+        All three end on the same CTA style: pill button, Plus Jakarta 700, slight glow matching the accent. Keeps visual muscle memory across triggers.
+      </DCPostIt>
+      <DCPostIt top={540} right={36} rotate={2} width={180}>
+        Trial language: 'Start 7-day free trial' on A, 'Try 7 days free' on B. Sheet is terser because real estate is tight.
+      </DCPostIt>
+    </DesignCanvas>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
