@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Zehn · Paywall hero — book stack animation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Lora:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  :root{
+    --ink:#03212E; --ink-2:#052A3B; --ink-3:#063349;
+    --green:#82FF7F; --cream:#FBF2A8;
+    --text:#EAF3F8; --text-dim:rgba(234,243,248,.66); --text-mute:rgba(234,243,248,.42);
+    --line:rgba(255,255,255,.08); --line-2:rgba(255,255,255,.14);
+    --paper:#FBF7EE; --paper-2:#EFE7D6; --ink-warm:rgba(40,30,20,.9);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--paper);font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:var(--ink-warm);overflow:hidden}
+  button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+  .mono{font-family:'JetBrains Mono',monospace}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+// ───────────────────────────────────────────────────────────
+// BOOK DATA — the final resting positions in the stack
+// Index 2 (THINK AGAIN) is the ANCHOR: it starts visible, the others emerge from behind it.
+// ───────────────────────────────────────────────────────────
+const BOOKS = [
+  { t:"DEEP\nWORK",   c:"linear-gradient(155deg,#E88B5C,#8C4722)", r:-14, z:1, s:.88, x:-104 },
+  { t:"ATOMIC\nHABITS",c:"linear-gradient(155deg,#FBF2A8,#A57D24)", r:-4,  z:2, s:.96, x:-52  },
+  { t:"THINK\nAGAIN", c:"linear-gradient(155deg,#6EC1D6,#2E6C80)", r:4,   z:3, s:1,   x:0    }, // ANCHOR
+  { t:"IKIGAI",       c:"linear-gradient(155deg,#8FAA67,#3F5A20)", r:12,  z:2, s:.94, x:52   },
+  { t:"SAPIENS",      c:"linear-gradient(155deg,#B78FD8,#5A3B80)", r:20,  z:1, s:.86, x:104  },
+];
+const ANCHOR = 2;
+
+// Order books emerge: the closest-to-center first, working outward, alternating sides.
+// Sequence (indices): 2 (anchor, always visible) → 1, 3 → 0, 4
+const EMERGE_ORDER = [1, 3, 0, 4];
+
+// Per-book timing (in seconds, 0..TOTAL). Anchor is visible from 0.
+const ANCHOR_IN   = { start: 0.00, dur: 0.35 };       // subtle pop/settle on the anchor
+const EMERGE_DUR  = 0.45;                             // how long each book takes to arrive
+const EMERGE_GAP  = 0.05;                             // tiny breath between books (0 = back-to-back)
+const EMERGE_STEP = EMERGE_DUR + EMERGE_GAP;          // time between each book starting
+const EMERGE_START = 0.30;                            // first book starts after anchor is set
+const TOTAL = EMERGE_START + EMERGE_STEP * EMERGE_ORDER.length + 0.40; // +tail
+
+// ───────────────────────────────────────────────────────────
+// EASING — emphasised ease-out (spec sheet-worthy: cubic-bezier(0.22, 1, 0.36, 1))
+// ───────────────────────────────────────────────────────────
+// Smooth, single-motion easing — no overshoot, no springiness.
+// cubic-bezier(0.22, 1, 0.36, 1) — the classic "emphasised ease-out".
+const bezier = (t, p1x, p1y, p2x, p2y) => {
+  // Newton's method to solve x(t) = target, then return y(t)
+  const cx = 3*p1x, bx = 3*(p2x-p1x) - cx, ax = 1 - cx - bx;
+  const cy = 3*p1y, by = 3*(p2y-p1y) - cy, ay = 1 - cy - by;
+  const xAt = u => ((ax*u + bx)*u + cx)*u;
+  const dxAt = u => (3*ax*u + 2*bx)*u + cx;
+  let u = t;
+  for (let i=0;i<8;i++){
+    const x = xAt(u) - t;
+    const dx = dxAt(u);
+    if (Math.abs(dx) < 1e-6) break;
+    u -= x/dx;
+  }
+  return ((ay*u + by)*u + cy)*u;
+};
+const easeSmooth = t => t <= 0 ? 0 : t >= 1 ? 1 : bezier(t, 0.22, 1, 0.36, 1);
+const clamp01 = v => Math.max(0, Math.min(1, v));
+
+// Progress 0..1 for a given book at time t
+function progressFor(bookIdx, t){
+  if (bookIdx === ANCHOR){
+    const p = clamp01((t - ANCHOR_IN.start) / ANCHOR_IN.dur);
+    return easeSmooth(p);
+  }
+  const order = EMERGE_ORDER.indexOf(bookIdx);
+  const start = EMERGE_START + order * EMERGE_STEP;
+  return clamp01((t - start) / EMERGE_DUR);
+}
+
+// ───────────────────────────────────────────────────────────
+// Single book card at time t
+// ───────────────────────────────────────────────────────────
+function BookCard({ book, idx, t }){
+  const p = progressFor(idx, t);
+
+  let tx, rot, scale, opacity, zBoost = 0;
+
+  if (idx === ANCHOR){
+    // Anchor settles in once. No movement after.
+    const e = easeSmooth(p);
+    tx = 0;
+    rot = book.r * e;
+    scale = book.s * (0.94 + 0.06 * e);
+    opacity = e;
+  } else {
+    // Emerge from directly behind anchor in one continuous slide:
+    //  - start pinned at x=0, at anchor's final scale (book.s matches anchor visually)
+    //  - slide outward + rotate to final, as one motion (no bounce, no overshoot)
+    //  - stay below anchor in z until fully out
+    const e = easeSmooth(p);
+    tx = book.x * e;
+    rot = book.r * e;
+    // Scale stays constant — they don't grow, they're already full-size behind the anchor.
+    scale = book.s;
+    // Visible the entire time they're moving (they were hidden ONLY because they were behind the anchor).
+    opacity = p > 0 ? 1 : 0;
+    // Z-order: below anchor until they've cleared it (~40% of the way out).
+    zBoost = p < 0.4 ? -10 : 0;
+  }
+
+  return (
+    <div style={{
+      position:"absolute",
+      left:"50%",
+      top:0,
+      width:98, height:136,
+      marginLeft:-49,
+      borderRadius:6,
+      background:book.c,
+      transform:`translate3d(${tx}px,0,0) rotate(${rot}deg) scale(${scale})`,
+      transformOrigin:"50% 85%",
+      zIndex: book.z + zBoost,
+      opacity,
+      boxShadow:"0 14px 30px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.2)",
+      display:"grid",
+      placeItems:"center",
+      textAlign:"center",
+      padding:10,
+      color:"#fff",
+      fontSize:9,
+      fontWeight:800,
+      letterSpacing:".08em",
+      lineHeight:1.15,
+      whiteSpace:"pre",
+      willChange:"transform, opacity",
+    }}>{book.t}</div>
+  );
+}
+
+// ───────────────────────────────────────────────────────────
+// Hero section of the paywall — isolated, looping
+// ───────────────────────────────────────────────────────────
+function PaywallHeroAnimated({ t }){
+  return (
+    <div style={{width:372,height:782,borderRadius:44,background:"var(--ink)",overflow:"hidden",position:"relative",color:"var(--text)",fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+      {/* notch */}
+      <div style={{position:"absolute",top:12,left:"50%",transform:"translateX(-50%)",width:120,height:34,background:"#000",borderRadius:22,zIndex:50}}/>
+      {/* status bar */}
+      <div style={{position:"absolute",top:0,left:0,right:0,padding:"18px 34px 0",display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:16,fontWeight:600,color:"#fff",zIndex:10}}>
+        <span>9:41</span>
+        <span style={{display:"flex",gap:6,alignItems:"center"}}>
+          <svg width="18" height="11" viewBox="0 0 18 11"><rect x="0" y="7" width="3" height="4" rx="0.7" fill="#fff"/><rect x="5" y="5" width="3" height="6" rx="0.7" fill="#fff"/><rect x="10" y="3" width="3" height="8" rx="0.7" fill="#fff"/><rect x="15" y="0" width="3" height="11" rx="0.7" fill="#fff"/></svg>
+          <svg width="26" height="12" viewBox="0 0 26 12"><rect x="0.5" y="0.5" width="22" height="11" rx="3" stroke="#fff" strokeOpacity=".4" fill="none"/><rect x="2" y="2" width="19" height="8" rx="2" fill="#fff"/></svg>
+        </span>
+      </div>
+
+      {/* hero area */}
+      <div style={{position:"absolute",top:0,left:0,right:0,height:360,overflow:"hidden"}}>
+        {/* ambient green glow — intensifies as books fan out */}
+        <div style={{
+          position:"absolute",inset:0,
+          background:"radial-gradient(ellipse at 50% 30%, rgba(130,255,127,.35), transparent 60%)",
+          opacity: easeSmooth(clamp01((t - 0.1) / 0.8)),
+          transition:"none",
+        }}/>
+        <div style={{position:"absolute",inset:0,background:"linear-gradient(180deg, transparent 45%, var(--ink) 95%)"}}/>
+
+        {/* book stack — absolute container so we can position by transform */}
+        <div style={{position:"absolute",top:82,left:"50%",width:0,height:160}}>
+          {BOOKS.map((b,i)=>(<BookCard key={i} book={b} idx={i} t={t}/>))}
+        </div>
+      </div>
+
+      {/* sheet copy — fades in on last beat so the eye goes back to books first */}
+      <div style={{
+        position:"absolute",top:300,left:0,right:0,bottom:0,padding:"0 22px 34px",display:"flex",flexDirection:"column",
+        opacity: clamp01((t - (TOTAL - 0.5)) / 0.5),
+      }}>
+        <div style={{display:"inline-flex",alignSelf:"flex-start",alignItems:"center",gap:8,padding:"6px 12px",borderRadius:999,background:"rgba(130,255,127,.12)",border:"1px solid rgba(130,255,127,.3)"}}>
+          <span style={{width:14,height:14,borderRadius:4,background:"linear-gradient(145deg,#82FF7F,#92F090)"}}/>
+          <span className="mono" style={{fontSize:11,fontWeight:700,letterSpacing:".14em",textTransform:"uppercase",color:"var(--green)"}}>Zehn Premium</span>
+        </div>
+        <h1 style={{marginTop:14,fontSize:30,fontWeight:800,letterSpacing:"-0.032em",lineHeight:1.05,color:"#fff"}}>
+          Finish more books.<br/>
+          <span style={{fontFamily:"'Lora',serif",fontStyle:"italic",fontWeight:400,color:"var(--green)"}}>Feel smarter</span> doing it.
+        </h1>
+      </div>
+
+      {/* home indicator */}
+      <div style={{position:"absolute",bottom:8,left:"50%",transform:"translateX(-50%)",width:134,height:5,background:"rgba(255,255,255,.6)",borderRadius:999,zIndex:60}}/>
+    </div>
+  );
+}
+
+// ───────────────────────────────────────────────────────────
+// SPEC PANEL — developer handoff
+// ───────────────────────────────────────────────────────────
+function Row({ k, v, mono=true }){
+  return (
+    <div style={{display:"flex",justifyContent:"space-between",gap:14,padding:"7px 0",borderBottom:"1px dashed rgba(40,30,20,.1)"}}>
+      <span className="mono" style={{fontSize:11,color:"rgba(40,30,20,.55)",letterSpacing:".02em"}}>{k}</span>
+      <span className={mono?"mono":""} style={{fontSize:11,fontWeight:600,color:"rgba(40,30,20,.85)",textAlign:"right"}}>{v}</span>
+    </div>
+  );
+}
+
+function SpecPanel({ t, playing, setPlaying, setT }){
+  const beats = [
+    { at: 0.00, label: "t=0 · anchor visible", who: "THINK AGAIN settles in place" },
+    { at: EMERGE_START + EMERGE_STEP*0, label: `t=${(EMERGE_START + EMERGE_STEP*0).toFixed(2)}s · book 1`, who: "ATOMIC HABITS slides out to the left" },
+    { at: EMERGE_START + EMERGE_STEP*1, label: `t=${(EMERGE_START + EMERGE_STEP*1).toFixed(2)}s · book 2`, who: "IKIGAI slides out to the right" },
+    { at: EMERGE_START + EMERGE_STEP*2, label: `t=${(EMERGE_START + EMERGE_STEP*2).toFixed(2)}s · book 3`, who: "DEEP WORK slides out to the far left" },
+    { at: EMERGE_START + EMERGE_STEP*3, label: `t=${(EMERGE_START + EMERGE_STEP*3).toFixed(2)}s · book 4`, who: "SAPIENS slides out to the far right" },
+    { at: TOTAL-0.5, label: `t=${(TOTAL-0.5).toFixed(2)}s · copy fades in`, who: "Title + CTA area resolve" },
+  ];
+
+  return (
+    <div style={{width:360,padding:"28px 26px",background:"#fff",borderRadius:18,boxShadow:"0 1px 3px rgba(0,0,0,.06), 0 20px 40px rgba(0,0,0,.04)",display:"flex",flexDirection:"column",gap:18,maxHeight:"calc(100vh - 96px)",overflow:"auto"}}>
+      <div>
+        <div className="mono" style={{fontSize:11,fontWeight:700,letterSpacing:".14em",textTransform:"uppercase",color:"#82683c"}}>Paywall · hero intro</div>
+        <h2 style={{marginTop:6,fontSize:22,fontWeight:800,letterSpacing:"-0.02em",lineHeight:1.15}}>Book stack reveal</h2>
+        <p style={{marginTop:8,fontSize:13,color:"rgba(60,50,40,.65)",lineHeight:1.5}}>
+          The anchor book (center) is present from <span className="mono">t=0</span>. The remaining four emerge from behind it, fanning outward in two waves — inner pair first, then outer pair.
+        </p>
+      </div>
+
+      {/* Playback */}
+      <div>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+          <button onClick={()=>setPlaying(p=>!p)} style={{width:36,height:36,borderRadius:999,background:"var(--ink)",color:"#fff",display:"grid",placeItems:"center"}}>
+            {playing
+              ? <svg width="12" height="12" viewBox="0 0 24 24" fill="#fff"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+              : <svg width="12" height="12" viewBox="0 0 24 24" fill="#fff"><path d="M7 4v16l13-8z"/></svg>}
+          </button>
+          <button onClick={()=>{setT(0); setPlaying(true);}} className="mono" style={{fontSize:11,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:"rgba(40,30,20,.7)",padding:"8px 10px",borderRadius:8,background:"rgba(40,30,20,.05)"}}>Restart</button>
+          <div className="mono" style={{marginLeft:"auto",fontSize:12,fontWeight:700,color:"rgba(40,30,20,.85)"}}>{t.toFixed(2)}s / {TOTAL.toFixed(2)}s</div>
+        </div>
+        <input
+          type="range" min="0" max={TOTAL} step="0.01" value={t}
+          onChange={e=>{setPlaying(false); setT(parseFloat(e.target.value));}}
+          style={{width:"100%",accentColor:"var(--ink)"}}
+        />
+      </div>
+
+      {/* Order diagram */}
+      <div>
+        <div className="mono" style={{fontSize:11,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:"rgba(40,30,20,.55)",marginBottom:10}}>Emerge order</div>
+        <div style={{display:"flex",alignItems:"flex-end",justifyContent:"center",gap:4,padding:"12px",borderRadius:12,background:"#F7F2E6"}}>
+          {[0,1,2,3,4].map(i=>{
+            const isAnchor = i===ANCHOR;
+            const order = isAnchor ? "A" : String(EMERGE_ORDER.indexOf(i)+1);
+            return (
+              <div key={i} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:6}}>
+                <div style={{width:28,height:40,borderRadius:3,background:BOOKS[i].c,boxShadow:"0 4px 8px rgba(0,0,0,.15)",border: isAnchor?"1.5px solid #03212E":"none"}}/>
+                <div className="mono" style={{fontSize:10,fontWeight:700,color: isAnchor?"#03212E":"rgba(40,30,20,.55)"}}>{order}</div>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{fontSize:11,color:"rgba(60,50,40,.55)",marginTop:8,lineHeight:1.5}}>
+          <span className="mono" style={{color:"#03212E",fontWeight:700}}>A</span> = anchor (present at t=0).
+          Books <span className="mono">1 → 4</span> slide out sequentially, one after the other.
+        </div>
+      </div>
+
+      {/* Timing */}
+      <div>
+        <div className="mono" style={{fontSize:11,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:"rgba(40,30,20,.55)",marginBottom:6}}>Timing</div>
+        <Row k="Total duration" v={`${TOTAL.toFixed(2)}s`}/>
+        <Row k="Anchor settle" v={`${ANCHOR_IN.dur*1000|0}ms @ t=0`}/>
+        <Row k="First emerge" v={`t=${EMERGE_START*1000|0}ms`}/>
+        <Row k="Sequence" v="one at a time"/>
+        <Row k="Per-book emerge" v={`${EMERGE_DUR*1000|0}ms`}/>
+        <Row k="Gap between books" v={`${EMERGE_GAP*1000|0}ms`}/>
+        <Row k="Copy fade-in" v={`500ms at end`}/>
+      </div>
+
+      {/* Motion */}
+      <div>
+        <div className="mono" style={{fontSize:11,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:"rgba(40,30,20,.55)",marginBottom:6}}>Per-book motion (non-anchor)</div>
+        <Row k="translateX" v="0 → final (±52 / ±104px)"/>
+        <Row k="rotate" v="0° → final (±4° · ±12° · ±14°)"/>
+        <Row k="scale" v="constant (matches anchor)"/>
+        <Row k="opacity" v="1 throughout (hidden by z-order)"/>
+        <Row k="z-index" v="< anchor until 40%, then final"/>
+        <Row k="transform-origin" v="50% 85% (hinge at spine base)"/>
+      </div>
+
+      {/* Easing */}
+      <div>
+        <div className="mono" style={{fontSize:11,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:"rgba(40,30,20,.55)",marginBottom:6}}>Easing</div>
+        <Row k="All properties" v="cubic-bezier(.22,1,.36,1)"/>
+        <Row k="Curve" v="emphasised ease-out"/>
+        <Row k="Overshoot / bounce" v="none"/>
+      </div>
+
+      {/* Notes */}
+      <div style={{padding:"14px 14px",borderRadius:12,background:"#F7F2E6",fontSize:12,color:"rgba(60,50,40,.8)",lineHeight:1.55}}>
+        <div className="mono" style={{fontSize:10,fontWeight:700,letterSpacing:".14em",textTransform:"uppercase",color:"#82683c",marginBottom:6}}>Implementation notes</div>
+        All five cards share the same absolute position (<span className="mono">left:50%</span>, <span className="mono">marginLeft:-49</span>). Non-anchor books start stacked directly behind the anchor (<span className="mono">translateX(0) rotate(0)</span>, final scale), then tween only <span className="mono">x</span> and <span className="mono">rotate</span> to their final values — one smooth motion, no opacity or scale tweens. Z-index stays below the anchor for the first ~40% so they read as sliding out from behind. Keep <span className="mono">will-change: transform</span> on each. Run once on mount.
+      </div>
+
+      {/* Beats timeline */}
+      <div>
+        <div className="mono" style={{fontSize:11,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:"rgba(40,30,20,.55)",marginBottom:10}}>Beats</div>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {beats.map((b,i)=>{
+            const active = t >= b.at && (i===beats.length-1 || t < beats[i+1].at);
+            return (
+              <button key={i} onClick={()=>{setPlaying(false); setT(b.at);}} style={{textAlign:"left",padding:"10px 12px",borderRadius:10,background: active?"rgba(130,255,127,.12)":"transparent",border: active?"1px solid rgba(130,255,127,.35)":"1px solid rgba(40,30,20,.08)"}}>
+                <div className="mono" style={{fontSize:10,fontWeight:700,color: active?"#1f7a2a":"rgba(40,30,20,.7)",letterSpacing:".04em"}}>{b.label}</div>
+                <div style={{fontSize:12,color:"rgba(60,50,40,.7)",marginTop:3,lineHeight:1.4}}>{b.who}</div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ───────────────────────────────────────────────────────────
+// Stage
+// ───────────────────────────────────────────────────────────
+function Stage(){
+  const [t, setT] = React.useState(0);
+  const [playing, setPlaying] = React.useState(true);
+  const rafRef = React.useRef(null);
+  const lastTs = React.useRef(null);
+
+  React.useEffect(()=>{
+    if (!playing) return;
+    const step = (ts)=>{
+      if (lastTs.current == null) lastTs.current = ts;
+      const dt = (ts - lastTs.current)/1000;
+      lastTs.current = ts;
+      setT(prev=>{
+        let next = prev + dt;
+        if (next > TOTAL + 0.8){ next = 0; } // loop with small hold at end
+        return next;
+      });
+      rafRef.current = requestAnimationFrame(step);
+    };
+    rafRef.current = requestAnimationFrame(step);
+    return ()=>{ cancelAnimationFrame(rafRef.current); lastTs.current = null; };
+  },[playing]);
+
+  return (
+    <div style={{minHeight:"100vh",padding:"40px 48px",display:"flex",gap:48,alignItems:"flex-start",justifyContent:"center",background:"radial-gradient(ellipse at 30% 0%, #FFFDF5, var(--paper) 60%)"}}>
+      {/* Header band — absolute */}
+      <div style={{position:"fixed",top:18,left:48,display:"flex",alignItems:"center",gap:10,padding:"6px 14px",borderRadius:999,background:"#fff",boxShadow:"0 1px 3px rgba(0,0,0,.06)",zIndex:10}}>
+        <div style={{width:18,height:18,borderRadius:5,background:"linear-gradient(145deg,#82FF7F,#92F090)"}}/>
+        <span className="mono" style={{fontSize:11,fontWeight:700,letterSpacing:".14em",textTransform:"uppercase",color:"#5a4a2a"}}>Zehn · Animation spec · Paywall hero</span>
+      </div>
+
+      {/* Phone preview */}
+      <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:20,marginTop:30}}>
+        <div style={{width:390,height:800,borderRadius:52,background:"#000",padding:9,boxShadow:"0 40px 80px rgba(0,0,0,.35), 0 0 0 1px rgba(0,0,0,.2)"}}>
+          <PaywallHeroAnimated t={t}/>
+        </div>
+        <div className="mono" style={{fontSize:11,fontWeight:600,color:"rgba(40,30,20,.45)",letterSpacing:".08em"}}>iOS · 390 × 800 · looping preview</div>
+      </div>
+
+      {/* Spec panel */}
+      <div style={{marginTop:30}}>
+        <SpecPanel t={t} playing={playing} setPlaying={setPlaying} setT={setT}/>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<Stage/>);
+</script>
+</body>
+</html>
